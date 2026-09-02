@@ -102,15 +102,65 @@ jobs:
 
 
   # =========================================================
+  # Frontend Tests                        (added in Task 7.2C)
+  # =========================================================
+  # The frontend already ships a Vitest + React Testing Library suite in
+  # frontend/src/test/, but Task 7.1P never ran it. This job runs that suite
+  # so a broken frontend can no longer reach the container registry.
+  frontend-test:
+    name: Test frontend
+    runs-on: ubuntu-latest
+
+    # src/config/serviceUrls.js throws at import time if these are missing,
+    # so the same values used by .env.production are supplied to the test run.
+    env:
+      VITE_USER_SERVICE_URL: /api/user-service
+      VITE_STUDENT_SERVICE_URL: /api/student-service
+      VITE_LECTURER_SERVICE_URL: /api/lecturer-service
+      VITE_COURSE_SERVICE_URL: /api/course-service
+      VITE_ENROLLMENT_SERVICE_URL: /api/enrollment-service
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+
+      - name: Run tests
+        working-directory: frontend
+        run: |
+          npm run test:run
+
+      - name: Build production bundle
+        working-directory: frontend
+        run: |
+          npm run build
+
+
+  # =========================================================
   # Build and Push Docker Images
   # =========================================================
   build-and-push:
     name: Build and Push ${{ matrix.image }}
     runs-on: ubuntu-latest
 
-    # All backend tests must pass before this job starts
+    # All backend AND frontend tests must pass before this job starts.
+    # If either test job fails, GitHub Actions skips this job entirely,
+    # so no image is built or pushed to ACR.        (updated in Task 7.2C)
     needs:
       - backend-test
+      - frontend-test
 
     # Build and push when code is pushed to main or manually triggered
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
